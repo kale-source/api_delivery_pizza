@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from models import Usuario # Importando tabela usuário
-from dependences import pegar_sessao
+from dependences import pegar_sessao, authenticate_token
 from main import bcrypt_context, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
 from schemas import UsuarioSchema, LoginSchema
 from sqlalchemy.orm import Session
@@ -13,18 +13,11 @@ def create_token(id_usuario, token_duration=timedelta(minutes=ACCESS_TOKEN_EXPIR
     # Token JWT
     
     expiration_date = datetime.now(timezone.utc) + token_duration
-    dict_info = {"sub": id_usuario, 'exp': expiration_date} # Por padrão tem que deixar EXP para reconhecer que é um datetime
+    dict_info = {"sub": str(id_usuario), 'exp': expiration_date} # Por padrão tem que deixar EXP para reconhecer que é um datetime
 
     encoded_jwt = jwt.encode(dict_info, key=SECRET_KEY, algorithm=ALGORITHM)
 
     return encoded_jwt
-
-def authenticate_token(token, session: Session = Depends(pegar_sessao)):
-    #check = jwt.decode(token, SECRET_KEY, ALGORITHM)
-    
-    usuario = session.query(Usuario).filter(Usuario.id == 1).first()
-
-    return usuario
 
 @auth_router.get('/')
 async def home():
@@ -76,9 +69,7 @@ async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sess
         raise HTTPException(status_code=400, detail='Email ou senha inválidos.')
 
 @auth_router.get("/refresh")
-async def use_refresh_token(token):
-    usuario = authenticate_token(token) # Falta configurar a depends para passar como parametro para funcionar o refresh token
-
+async def use_refresh_token(usuario: Usuario = Depends(authenticate_token)):
     access_token = create_token(usuario.id)
 
     return {
