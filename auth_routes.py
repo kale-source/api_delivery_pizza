@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from models import Usuario # Importando tabela usuário
 from dependences import pegar_sessao, authenticate_token
 from main import bcrypt_context, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
@@ -61,6 +62,25 @@ async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sess
             return {
                     'access_token': access_token, 
                     'refresh': refresh_token, 
+                    'token_type': 'Bearer'
+                    }
+        else:
+            raise HTTPException(status_code=400, detail='Email ou senha inválidos.')
+    else:
+        raise HTTPException(status_code=400, detail='Email ou senha inválidos.')
+
+@auth_router.post("/login-form")
+async def login(login_form: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(pegar_sessao)):
+    usuario = session.query(Usuario).filter(Usuario.email == login_form.username).first()
+
+    if usuario:
+        check_password = bcrypt_context.verify(login_form.password, usuario.password)
+        
+        if check_password:
+            access_token = create_token(usuario.id)
+
+            return {
+                    'access_token': access_token, 
                     'token_type': 'Bearer'
                     }
         else:
