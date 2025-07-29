@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from models import Usuario # Importando tabela usuário
-from dependences import pegar_sessao, authenticate_token
+from dependences import pegar_sessao, authenticate_token, get_current_user_optional
 from main import bcrypt_context, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
 from schemas import UsuarioSchema, LoginSchema
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 auth_router = APIRouter(prefix='/auth', tags=['auth'])
 
@@ -30,7 +31,13 @@ async def home():
         }
 
 @auth_router.post("/criar_usuario")
-async def create_account(usuario_schema: UsuarioSchema, session: Session = Depends(pegar_sessao)):
+async def create_account(usuario_schema: UsuarioSchema, session: Session = Depends(pegar_sessao), usuario_auth: Optional[Usuario] = Depends(get_current_user_optional)):
+    
+    if not usuario_auth and usuario_schema.admin:
+        raise HTTPException(status_code=401, detail='Você não está autenticado, não é possivel criar uma conta admin.')
+    elif usuario_auth:
+        if not usuario_auth.admin and usuario_schema.admin:
+            raise HTTPException(status_code=401, detail='Você não tem permissão de criar um usuário admin')
     
     usuario = session.query(Usuario).filter(Usuario.email == usuario_schema.email).first()
     try:

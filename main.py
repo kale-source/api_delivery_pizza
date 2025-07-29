@@ -12,7 +12,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES'))
 app = FastAPI() # Inicializando o FastAPI
 
 bcrypt_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
-oauth2_schema = OAuth2PasswordBearer(tokenUrl='auth/login-form')
+oauth2_schema = OAuth2PasswordBearer(tokenUrl='auth/login-form', auto_error=True)
+oauth2_schema_optional = OAuth2PasswordBearer(tokenUrl='auth/login-form', auto_error=False)
 
 # Importar roteadores das rotas
 from auth_routes import auth_router
