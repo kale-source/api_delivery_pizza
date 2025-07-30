@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from dependences import pegar_sessao, authenticate_token
-from schemas import PedidoSchema
-from models import Pedidos, Usuario
+from models import Pedidos, Usuario, ItensPedidos
+from schemas import ItemSchema
 
 order_router = APIRouter(prefix='/pedidos', tags=['pedidos'], dependencies=[Depends(authenticate_token)])
 
@@ -46,6 +46,42 @@ async def cancelar_pedido(id_pedido: int, session: Session = Depends(pegar_sessa
         'mensagem': f'Pedido {order.id} foi cancelado com sucesso.',
         'order': order
         }
+
+@order_router.get('/listar_pedidos')
+async def listar_pedidos(session: Session = Depends(pegar_sessao), usuario: Usuario = Depends(authenticate_token)):
+    if not usuario.admin:
+        raise HTTPException(status_code=401, detail='Usuário não possui permissão necessária.')
+    
+    orders = session.query(Pedidos).all()
+
+    return {
+        'orders': orders
+        }
+
+@order_router.post('/pedido/adicionar_pedido/{id_pedido}')
+async def adicionar_pedido(id_pedido: int, item_order_schema: ItemSchema, session: Session = Depends(pegar_sessao), usuario: Usuario = Depends(authenticate_token)):
+    order = session.query(Pedidos).filter(Pedidos.id == id_pedido).first()
+
+    if not order:
+        raise HTTPException(status_code=400, detail='Pedido não encontrado.')
+    elif order.user_id != usuario.id and not usuario.admin:
+        raise HTTPException(status_code=401, detail='Você não tem autorização para acessar esse pedido.')
+    
+    item_pedido = ItensPedidos(item_order_schema.quantity, item_order_schema.sabor, item_order_schema.tamanho, item_order_schema.preco_unitario, id_pedido)
+
+    session.add(item_pedido)
+    order.price_calc()
+    session.commit()
+
+    return {
+        'mensagem': 'Pedido realizado com sucesso!',
+        'order_id': order.id,
+        'price': order.preco
+    }
+
+
+
+
 
 
 
