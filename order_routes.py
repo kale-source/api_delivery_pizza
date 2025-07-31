@@ -79,22 +79,26 @@ async def adicionar_pedido(id_pedido: int, item_order_schema: ItemSchema, sessio
         'price': order.preco
     }
 
-@order_router.delete('/pedido/remover_item/{id_pedido}')
-async def remover_pedido(id_pedido: int, session: Session = Depends(pegar_sessao), usuario: Usuario = Depends(authenticate_token)):
-    order = session.query(Pedidos).filter(Pedidos.id == id_pedido).first()
+@order_router.delete('/pedido/remover_item/{id_item}')
+async def remover_pedido(id_item: int, session: Session = Depends(pegar_sessao), usuario: Usuario = Depends(authenticate_token)):
+    order_items = session.query(ItensPedidos).filter(ItensPedidos.id == id_item).first()
 
-    if not order:
-        raise HTTPException(status_code=400, detail='Pedido não encontrado')
+    if not order_items:
+        raise HTTPException(status_code=400, detail='Item não encontrado')
+
+    order = session.query(Pedidos).filter(Pedidos.id == order_items.pedido).first()
 
     if order.user_id != usuario.id and not usuario.admin:
-        raise HTTPException(status_code=401, detail='Você não tem autorização para remover esse pedido.')
+        raise HTTPException(status_code=401, detail='Você não tem autorização para remover esse item.')
     
-    session.delete(order)
+    session.delete(order_items)
+    order.price_calc()
     session.commit()
 
     return {
-        'mensagem': 'Pedido deletado com sucesso!',
-        'order_id': order.id 
+        'mensagem': 'Item deletado com sucesso!',
+        'order_id': order.id,
+        'itens_pedido': order_items
     }
 
 
