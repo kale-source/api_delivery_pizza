@@ -68,7 +68,7 @@ async def adicionar_pedido(id_pedido: int, item_order_schema: ItemSchema, sessio
         raise HTTPException(status_code=401, detail='Você não tem autorização para acessar esse pedido.')
     
     item_pedido = ItensPedidos(item_order_schema.quantity, item_order_schema.sabor, item_order_schema.tamanho, item_order_schema.preco_unitario, id_pedido)
-
+    
     session.add(item_pedido)
     order.price_calc()
     session.commit()
@@ -78,6 +78,29 @@ async def adicionar_pedido(id_pedido: int, item_order_schema: ItemSchema, sessio
         'order_id': order.id,
         'price': order.preco
     }
+
+@order_router.delete('/pedido/remover_item/{id_pedido}')
+async def remover_pedido(id_pedido: int, session: Session = Depends(pegar_sessao), usuario: Usuario = Depends(authenticate_token)):
+    order = session.query(Pedidos).filter(Pedidos.id == id_pedido).first()
+
+    if not order:
+        raise HTTPException(status_code=400, detail='Pedido não encontrado')
+
+    if order.user_id != usuario.id and not usuario.admin:
+        raise HTTPException(status_code=401, detail='Você não tem autorização para remover esse pedido.')
+    
+    session.delete(order)
+    session.commit()
+
+    return {
+        'mensagem': 'Pedido deletado com sucesso!',
+        'order_id': order.id 
+    }
+
+
+
+
+
 
 
 
