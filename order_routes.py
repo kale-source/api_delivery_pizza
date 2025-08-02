@@ -15,7 +15,6 @@ async def pedidos():
     
 @order_router.post('/pedido')
 async def criar_pedido(session: Session = Depends(pegar_sessao), usuario: Usuario = Depends(authenticate_token)):
-    # Falta definir pedidos, entre outros.
     create_order = Pedidos(user_id = usuario.id)
 
     session.add(create_order)
@@ -76,6 +75,7 @@ async def adicionar_pedido(id_pedido: int, item_order_schema: ItemSchema, sessio
     return {
         'mensagem': 'Pedido realizado com sucesso!',
         'order_id': order.id,
+        'item_id': item_pedido.id,
         'price': order.preco
     }
 
@@ -100,6 +100,51 @@ async def remover_pedido(id_item: int, session: Session = Depends(pegar_sessao),
         'order_id': order.id,
         'itens_pedido': order_items
     }
+
+@order_router.post('/pedido/finalizar_pedido/{id_pedido}')
+async def finalizar_pedido(id_pedido: int, session: Session = Depends(pegar_sessao), usuario: Usuario = Depends(authenticate_token)):
+    order = session.query(Pedidos).filter(Pedidos.id == id_pedido).first()
+
+    if not order:
+        raise HTTPException(status_code=400, detail=f'Pedido {id_pedido} não encontrado.')
+    elif not usuario.admin:
+        raise HTTPException(status_code=401, detail='Você não tem autorização para finalizar esse pedido.')
+    
+    order.status = 'FINALIZADO'
+    session.commit()
+
+    return {
+        'mensagem': f'Pedido {order.id} foi finalizado com sucesso.',
+        'pedido': order
+    }
+
+@order_router.get('/pedido/{id_pedido}')
+async def exibir_pedido(id_pedido: int, session: Session = Depends(pegar_sessao), usuario: Usuario = Depends(authenticate_token)):
+    order = session.query(Pedidos).filter(Pedidos.id == id_pedido).first()
+
+    if not order:
+        raise HTTPException(status_code=400, detail=f'Pedido {id_pedido} não encontrado.')
+    elif not usuario.admin and usuario.id != order.user_id:
+        raise HTTPException(status_code=401, detail='Você não tem autorização para finalizar esse pedido.')
+    
+    return {
+        'quantidade_itens_pedido': len(order.items),
+        'pedido': order
+    }
+
+@order_router.get('/listar/pedidos-usuario')
+async def exibir_pedidos_usuario(session: Session = Depends(pegar_sessao), usuario: Usuario = Depends(authenticate_token)):
+    orders = session.query(Pedidos).filter(Pedidos.user_id == usuario.id).all()
+
+    if not orders:
+        raise HTTPException(status_code=400, detail=f'Pedidos não encontrados.')
+
+    return {
+        'pedidos': orders
+    }
+
+    
+
 
 
 
