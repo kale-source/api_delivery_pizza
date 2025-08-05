@@ -1,9 +1,9 @@
-from sqlalchemy import create_engine, Column, String, Integer, Boolean, Float, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, Float, ForeignKey, select
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy_utils.types import ChoiceType
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
-# cria a conexão do seu banco de dados
-db = create_engine('sqlite:///banco.db')
+# criando engine do db
+db = create_async_engine('sqlite+aiosqlite:///./banco.db', echo=True)
 
 # cria a base do banco de dados
 Base = declarative_base()
@@ -29,27 +29,25 @@ class Usuario(Base):
 class Pedidos(Base):
     __tablename__ = "pedidos"
 
-    # STATUS_PEDIDOS =  (
-    #     ('PENDENTE', 'PENDENTE'),
-    #     ('CANCELADO', 'CANCELADO'),
-    #     ('FINALIZADO', 'FINALIZADO')
-    # )
-
     id = Column('id', Integer, primary_key=True, autoincrement=True)
     status = Column('status', String) # PENDENTE, CANCELADO, FINALIZADO '''ChoiceType(choices=STATUS_PEDIDOS)'''
     user_id = Column('user_id', ForeignKey('usuarios.id'))
-    preco = Column('preco', Float, nullable=True)
-    items = relationship('ItensPedidos', cascade='all, delete')
+    preco = Column('preco', Float, default=0)
+    items = relationship('ItensPedidos', cascade='all, delete', lazy='selectin')
 
     def __init__(self, user_id, status="PENDENTE", preco=0):
         self.status = status
         self.user_id = user_id
         self.preco = preco
     
-    def price_calc(self):
+    async def price_calc(self, session: AsyncSession):
         preco_total = 0
-        for items in self.items:
-            preco_item = items.preco_unitario * items.quantity
+
+        result = await session.execute(select(ItensPedidos).where(ItensPedidos.pedido == self.id))
+        items = result.scalars().all()
+
+        for item in items:
+            preco_item = item.preco_unitario * item.quantity
             preco_total += preco_item
         
         self.preco = preco_total
