@@ -4,7 +4,8 @@ from models import Usuario # Importando tabela usuário
 from dependences import pegar_sessao, authenticate_token, get_current_user_optional
 from main import bcrypt_context, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
 from schemas import UsuarioSchema, LoginSchema
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -31,7 +32,7 @@ async def home():
         }
 
 @auth_router.post("/criar_usuario")
-async def create_account(usuario_schema: UsuarioSchema, session: Session = Depends(pegar_sessao), usuario_auth: Optional[Usuario] = Depends(get_current_user_optional)):
+async def create_account(usuario_schema: UsuarioSchema, session: AsyncSession = Depends(pegar_sessao), usuario_auth: Optional[Usuario] = Depends(get_current_user_optional)):
     
     if not usuario_auth and usuario_schema.admin:
         raise HTTPException(status_code=401, detail='Você não está autenticado, não é possivel criar uma conta admin.')
@@ -39,16 +40,18 @@ async def create_account(usuario_schema: UsuarioSchema, session: Session = Depen
         if not usuario_auth.admin and usuario_schema.admin:
             raise HTTPException(status_code=401, detail='Você não tem permissão de criar um usuário admin')
     
-    usuario = session.query(Usuario).filter(Usuario.email == usuario_schema.email).first()
+    result = await session.execute(select(Usuario).where(Usuario.email == usuario_schema.email))
+    usuario = result.scalars().first() # Scalars transforma o resultado da consulta em objetos python
+
     try:
         if usuario:
-            raise HTTPException(status_code=400, detail='E-mail do usuário já cadastrado.')
+            raise HTTPException(status_code=400, detail=f'E-mail do usuário já cadastrado. {usuario}')
         else:
             crypt_password = bcrypt_context.hash(usuario_schema.password)
 
             novo_usuario = Usuario(usuario_schema.name, usuario_schema.email, crypt_password, usuario_schema.status, usuario_schema.admin) # passar na ordem do db
             session.add(novo_usuario)
-            session.commit()
+            await session.commit()
             return {
                 'mensagem': f'Email {usuario_schema.email} cadastrado com sucesso.'
                 }
@@ -56,8 +59,9 @@ async def create_account(usuario_schema: UsuarioSchema, session: Session = Depen
         raise HTTPException(status_code=400, detail='E-mail do usuário já cadastrado.')
 
 @auth_router.post("/login")
-async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sessao)):
-    usuario = session.query(Usuario).filter(Usuario.email == login_schema.email).first()
+async def login(login_schema: LoginSchema, session: AsyncSession = Depends(pegar_sessao)):
+    result = await session.execute(select(Usuario).where(Usuario.email == login_schema.email))
+    usuario = result.scalars().first()
 
     if usuario:
         check_password = bcrypt_context.verify(login_schema.password, usuario.password)
@@ -77,8 +81,9 @@ async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sess
         raise HTTPException(status_code=400, detail='Email ou senha inválidos.')
 
 @auth_router.post("/login-form")
-async def login(login_form: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(pegar_sessao)):
-    usuario = session.query(Usuario).filter(Usuario.email == login_form.username).first()
+async def login(login_form: OAuth2PasswordRequestForm = Depends(), session: AsyncSession = Depends(pegar_sessao)):
+    result = await session.execute(select(Usuario).where(Usuario.email == login_form.username))
+    usuario = result.scalars().first()
 
     if usuario:
         check_password = bcrypt_context.verify(login_form.password, usuario.password)
